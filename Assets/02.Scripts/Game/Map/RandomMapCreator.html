@@ -1,0 +1,946 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>오피스 빌딩 랜덤 맵 생성기</title>
+    <style>
+        body {
+            margin: 0;
+            padding: 20px;
+            font-family: Arial, sans-serif;
+            background: #f0f0f0;
+        }
+        
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            background: white;
+            padding: 20px;
+            border-radius: 10px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+        }
+        
+        h1 {
+            text-align: center;
+            color: #333;
+            margin-bottom: 20px;
+        }
+        
+        .controls {
+            text-align: center;
+            margin-bottom: 20px;
+        }
+        
+        button {
+            background: #4CAF50;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            font-size: 16px;
+            border-radius: 5px;
+            cursor: pointer;
+            transition: background 0.3s;
+        }
+        
+        button:hover {
+            background: #45a049;
+        }
+        
+        .map-container {
+            display: flex;
+            justify-content: center;
+            margin: 20px 0;
+        }
+        
+        canvas {
+            border: 2px solid #333;
+            background: white;
+        }
+        
+        .legend {
+            display: flex;
+            flex-wrap: wrap;
+            justify-content: center;
+            gap: 20px;
+            margin-top: 20px;
+        }
+        
+        .legend-item {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        
+        .color-box {
+            width: 20px;
+            height: 20px;
+            border: 1px solid #333;
+        }
+        
+        .info {
+            text-align: center;
+            margin-top: 20px;
+            color: #666;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🏢 오피스 빌딩 랜덤 맵 생성기</h1>
+        
+        <div class="controls">
+            <button onclick="generateMap()">새 맵 생성</button>
+        </div>
+        
+        <div class="map-container">
+            <canvas id="mapCanvas" width="500" height="500"></canvas>
+        </div>
+        
+        <div class="legend">
+            <div class="legend-item">
+                <div class="color-box" style="background: #87CEEB;"></div>
+                <span>소형 사무실 (10x10)</span>
+            </div>
+            <div class="legend-item">
+                <div class="color-box" style="background: #4682B4;"></div>
+                <span>대형 사무실 (20x20)</span>
+            </div>
+            <div class="legend-item">
+                <div class="color-box" style="background: #FFB6C1;"></div>
+                <span>화장실 (10x5)</span>
+            </div>
+            <div class="legend-item">
+                <div class="color-box" style="background: #98FB98;"></div>
+                <span>회의실 (10x5)</span>
+            </div>
+            <div class="legend-item">
+                <div class="color-box" style="background: #DDA0DD;"></div>
+                <span>계단 (5x5)</span>
+            </div>
+            <div class="legend-item">
+                <div class="color-box" style="background: #F0E68C;"></div>
+                <span>엘레베이터 (5x5)</span>
+            </div>
+            <div class="legend-item">
+                <div class="color-box" style="background: #D2B48C;"></div>
+                <span>창고 (10x10)</span>
+            </div>
+            <div class="legend-item">
+                <div class="color-box" style="background: #FFFFFF;"></div>
+                <span>복도 (폭 5) & 외부문</span>
+            </div>
+            <div class="legend-item">
+                <div class="color-box" style="background: #000000;"></div>
+                <span>문 (길이 5)</span>
+            </div>
+        </legend>
+        
+        <div class="info">
+            <p>• 모든 방과 복도가 5단위 격자에 정렬되어 있습니다</p>
+            <p>• 화장실, 엘레베이터, 계단은 문이 하나만 있습니다</p>
+            <p>• 일반 방들은 필요에 따라 여러 문을 가질 수 있습니다</p>
+            <p>• 외부 문은 2개, 서로 다른 방향에 배치됩니다</p>
+            <p>• T자형, 십자형 복도로 효율적으로 연결되어 있습니다</p>
+        </div>
+    </div>
+
+    <script>
+        const MAP_SIZE = 50;
+        const CELL_SIZE = 10;
+        const GRID_UNIT = 5;
+        
+        const ROOM_TYPES = {
+            EMPTY: 0,
+            SMALL_OFFICE: 1,
+            LARGE_OFFICE: 2,
+            TOILET: 3,
+            MEETING: 4,
+            STAIR: 5,
+            ELEVATOR: 6,
+            STORAGE: 7,
+            CORRIDOR: 8,
+            EXTERNAL_DOOR: 9,
+            DOOR: 10
+        };
+        
+        const ROOMS = {
+            [ROOM_TYPES.SMALL_OFFICE]: { width: 10, height: 10, color: '#87CEEB', name: '소형사무실' },
+            [ROOM_TYPES.LARGE_OFFICE]: { width: 20, height: 20, color: '#4682B4', name: '대형사무실' },
+            [ROOM_TYPES.TOILET]: { width: 10, height: 5, color: '#FFB6C1', name: '화장실' },
+            [ROOM_TYPES.MEETING]: { width: 10, height: 5, color: '#98FB98', name: '회의실' },
+            [ROOM_TYPES.STAIR]: { width: 5, height: 5, color: '#DDA0DD', name: '계단' },
+            [ROOM_TYPES.ELEVATOR]: { width: 5, height: 5, color: '#F0E68C', name: '엘레베이터' },
+            [ROOM_TYPES.STORAGE]: { width: 10, height: 10, color: '#D2B48C', name: '창고' },
+            [ROOM_TYPES.CORRIDOR]: { color: '#FFFFFF', name: '복도' },
+            [ROOM_TYPES.EXTERNAL_DOOR]: { color: '#FF6347', name: '외부문' },
+            [ROOM_TYPES.DOOR]: { color: '#000000', name: '문' }
+        };
+        
+        let map = [];
+        let rooms = [];
+        
+        function initMap() {
+            map = [];
+            for (let i = 0; i < MAP_SIZE; i++) {
+                map[i] = new Array(MAP_SIZE).fill(ROOM_TYPES.EMPTY);
+            }
+            rooms = [];
+        }
+        
+        function alignToGrid(value) {
+            return Math.floor(value / GRID_UNIT) * GRID_UNIT;
+        }
+        
+        function canPlaceRoom(x, y, width, height) {
+            if (x + width > MAP_SIZE || y + height > MAP_SIZE) return false;
+            
+            for (let i = Math.max(0, x - GRID_UNIT); i < Math.min(MAP_SIZE, x + width + GRID_UNIT); i++) {
+                for (let j = Math.max(0, y - GRID_UNIT); j < Math.min(MAP_SIZE, y + height + GRID_UNIT); j++) {
+                    if (map[i][j] !== ROOM_TYPES.EMPTY) return false;
+                }
+            }
+            return true;
+        }
+        
+        function placeRoom(type, x, y, width, height) {
+            for (let i = x; i < x + width; i++) {
+                for (let j = y; j < y + height; j++) {
+                    map[i][j] = type;
+                }
+            }
+            rooms.push({ type, x, y, width, height, connections: 0, doorCount: 0 });
+        }
+        
+        function generateRooms() {
+            const roomsToPlace = [
+                { type: ROOM_TYPES.SMALL_OFFICE, ...ROOMS[ROOM_TYPES.SMALL_OFFICE] },
+                { type: ROOM_TYPES.LARGE_OFFICE, ...ROOMS[ROOM_TYPES.LARGE_OFFICE] },
+                { type: ROOM_TYPES.TOILET, ...ROOMS[ROOM_TYPES.TOILET] },
+                { type: ROOM_TYPES.MEETING, ...ROOMS[ROOM_TYPES.MEETING] },
+                { type: ROOM_TYPES.STAIR, ...ROOMS[ROOM_TYPES.STAIR] },
+                { type: ROOM_TYPES.ELEVATOR, ...ROOMS[ROOM_TYPES.ELEVATOR] },
+                { type: ROOM_TYPES.STORAGE, ...ROOMS[ROOM_TYPES.STORAGE] }
+            ];
+            
+            for (let room of roomsToPlace) {
+                let attempts = 0;
+                let placed = false;
+                
+                while (!placed) {
+                    let x = alignToGrid(Math.floor(Math.random() * (MAP_SIZE - room.width)));
+                    let y = alignToGrid(Math.floor(Math.random() * (MAP_SIZE - room.height)));
+                    
+                    if (canPlaceRoom(x, y, room.width, room.height)) {
+                        placeRoom(room.type, x, y, room.width, room.height);
+                        placed = true;
+                        console.log(`${room.name} 배치 완료: (${x}, ${y})`);
+                    }
+                    attempts++;
+                    
+                    if (attempts > 2000) {
+                        console.log(`${room.name} 배치 어려움. 맵 초기화 후 재시작.`);
+                        initMap();
+                        rooms = [];
+                        generateRooms();
+                        return;
+                    }
+                }
+            }
+        }
+        
+        function generateExternalDoors() {
+            const sides = ['top', 'right', 'bottom', 'left'];
+            const selectedSides = [];
+            
+            while (selectedSides.length < 2) {
+                const side = sides[Math.floor(Math.random() * sides.length)];
+                if (!selectedSides.includes(side)) {
+                    selectedSides.push(side);
+                }
+            }
+            
+            console.log(`외부문을 생성할 방향: ${selectedSides.join(', ')}`);
+            
+            for (let side of selectedSides) {
+                let attempts = 0;
+                let placed = false;
+                
+                while (!placed) {
+                    let x, y, width, height;
+                    
+                    switch (side) {
+                        case 'top':
+                            x = alignToGrid(Math.floor(Math.random() * (MAP_SIZE - 10)));
+                            y = 0;
+                            width = 10;
+                            height = 5;
+                            break;
+                        case 'bottom':
+                            x = alignToGrid(Math.floor(Math.random() * (MAP_SIZE - 10)));
+                            y = MAP_SIZE - 5;
+                            width = 10;
+                            height = 5;
+                            break;
+                        case 'left':
+                            x = 0;
+                            y = alignToGrid(Math.floor(Math.random() * (MAP_SIZE - 10)));
+                            width = 5;
+                            height = 10;
+                            break;
+                        case 'right':
+                            x = MAP_SIZE - 5;
+                            y = alignToGrid(Math.floor(Math.random() * (MAP_SIZE - 10)));
+                            width = 5;
+                            height = 10;
+                            break;
+                    }
+                    
+                    if (canPlaceRoom(x, y, width, height)) {
+                        for (let i = x; i < x + width; i++) {
+                            for (let j = y; j < y + height; j++) {
+                                if (i >= 0 && i < MAP_SIZE && j >= 0 && j < MAP_SIZE) {
+                                    map[i][j] = ROOM_TYPES.CORRIDOR;
+                                }
+                            }
+                        }
+                        
+                        rooms.push({ 
+                            type: ROOM_TYPES.EXTERNAL_DOOR, 
+                            x, y, width, height, 
+                            connections: 0,
+                            doorCount: 0,
+                            side: side 
+                        });
+                        
+                        placed = true;
+                        console.log(`외부문 생성 완료: ${side} 방향 (${x}, ${y})`);
+                    }
+                    attempts++;
+                    
+                    if (attempts > 1000) {
+                        console.log(`외부문 ${side} 배치 어려움. 맵 재생성.`);
+                        generateMap();
+                        return;
+                    }
+                }
+            }
+        }
+        
+        function getWallSegments(room) {
+            const segments = [];
+            
+            // 상단 벽
+            for (let i = 0; i < room.width / 5; i++) {
+                segments.push({
+                    side: 'top',
+                    x: room.x + i * 5,
+                    y: room.y - 5,
+                    doorX: room.x + i * 5,
+                    doorY: room.y - 1,
+                    roomSide: 'top'
+                });
+            }
+            
+            // 하단 벽
+            for (let i = 0; i < room.width / 5; i++) {
+                segments.push({
+                    side: 'bottom',
+                    x: room.x + i * 5,
+                    y: room.y + room.height,
+                    doorX: room.x + i * 5,
+                    doorY: room.y + room.height,
+                    roomSide: 'bottom'
+                });
+            }
+            
+            // 좌측 벽
+            for (let i = 0; i < room.height / 5; i++) {
+                segments.push({
+                    side: 'left',
+                    x: room.x - 5,
+                    y: room.y + i * 5,
+                    doorX: room.x - 1,
+                    doorY: room.y + i * 5,
+                    roomSide: 'left'
+                });
+            }
+            
+            // 우측 벽
+            for (let i = 0; i < room.height / 5; i++) {
+                segments.push({
+                    side: 'right',
+                    x: room.x + room.width,
+                    y: room.y + i * 5,
+                    doorX: room.x + room.width,
+                    doorY: room.y + i * 5,
+                    roomSide: 'right'
+                });
+            }
+            
+            return segments;
+        }
+        
+        function createCorridor(x, y, width, height) {
+            for (let i = x; i < x + width; i++) {
+                for (let j = y; j < y + height; j++) {
+                    if (i >= 0 && i < MAP_SIZE && j >= 0 && j < MAP_SIZE) {
+                        if (map[i][j] === ROOM_TYPES.EMPTY || map[i][j] === ROOM_TYPES.CORRIDOR) {
+                            map[i][j] = ROOM_TYPES.CORRIDOR;
+                        }
+                    }
+                }
+            }
+        }
+        
+        function createDoor(room, segment) {
+            if (room.type === ROOM_TYPES.EXTERNAL_DOOR) return true; // 외부문은 항상 성공
+            
+            // 특수 방 문 개수 제한 확인
+            const specialRooms = [ROOM_TYPES.TOILET, ROOM_TYPES.ELEVATOR, ROOM_TYPES.STAIR];
+            const maxDoors = specialRooms.includes(room.type) ? 1 : 999; // 특수방은 1개, 일반방은 제한없음
+            
+            if (room.doorCount >= maxDoors) {
+                console.log(`${getRoomName(room)} 문 개수 제한 도달 (${room.doorCount}/${maxDoors})`);
+                return false; // 문 개수 초과
+            }
+            
+            // 이미 복도와 연결되어 있으면 추가 문 생성하지 않음
+            if (room.connections > 0 && specialRooms.includes(room.type)) {
+                console.log(`${getRoomName(room)} 이미 연결되어 있음, 추가 문 생성 안함`);
+                return false;
+            }
+            
+            if (segment.roomSide === 'top' || segment.roomSide === 'bottom') {
+                // 수평 문 (길이 5)
+                for (let i = 0; i < 5; i++) {
+                    const x = segment.doorX + i;
+                    const y = segment.doorY;
+                    if (x >= 0 && x < MAP_SIZE && y >= 0 && y < MAP_SIZE) {
+                        map[x][y] = ROOM_TYPES.DOOR;
+                    }
+                }
+            } else {
+                // 수직 문 (길이 5)
+                for (let i = 0; i < 5; i++) {
+                    const x = segment.doorX;
+                    const y = segment.doorY + i;
+                    if (x >= 0 && x < MAP_SIZE && y >= 0 && y < MAP_SIZE) {
+                        map[x][y] = ROOM_TYPES.DOOR;
+                    }
+                }
+            }
+            
+            room.doorCount++;
+            console.log(`${getRoomName(room)} 문 생성 완료 (${room.doorCount}/${maxDoors})`);
+            return true;
+        }
+        
+        function connectTwoRoomsDirectly(room1, room2) {
+            const segments1 = getWallSegments(room1);
+            const segments2 = getWallSegments(room2);
+            
+            let bestConnection = null;
+            let minDistance = Infinity;
+            
+            // 가장 가까운 벽면 구간들 찾기
+            for (let seg1 of segments1) {
+                for (let seg2 of segments2) {
+                    const dist = Math.abs(seg1.x + 2.5 - seg2.x - 2.5) + 
+                                Math.abs(seg1.y + 2.5 - seg2.y - 2.5);
+                    if (dist < minDistance) {
+                        minDistance = dist;
+                        bestConnection = {seg1, seg2};
+                    }
+                }
+            }
+            
+            if (bestConnection) {
+                const {seg1, seg2} = bestConnection;
+                
+                // 문 생성
+                createDoor(room1, seg1);
+                createDoor(room2, seg2);
+                
+                // 복도 생성 (폭 5로 L자 연결)
+                createLShapedCorridor(seg1, seg2);
+                
+                room1.connections++;
+                room2.connections++;
+                return true;
+            }
+            
+            return false;
+        }
+        
+        function createCorridorSegment(x, y, width, height) {
+            for (let i = x; i < x + width; i++) {
+                for (let j = y; j < y + height; j++) {
+                    if (i >= 0 && i < MAP_SIZE && j >= 0 && j < MAP_SIZE) {
+                        const cellType = map[i][j];
+                        if (cellType === ROOM_TYPES.EMPTY || cellType === ROOM_TYPES.CORRIDOR) {
+                            map[i][j] = ROOM_TYPES.CORRIDOR;
+                        }
+                    }
+                }
+            }
+        }
+        
+        function findCorridorPath(startX, startY, endX, endY) {
+            const path = [];
+            
+            path.push({x: alignToGrid(startX), y: alignToGrid(startY)});
+            
+            if (Math.random() > 0.5) {
+                path.push({x: alignToGrid(endX), y: alignToGrid(startY)});
+            } else {
+                path.push({x: alignToGrid(startX), y: alignToGrid(endY)});
+            }
+            
+            path.push({x: alignToGrid(endX), y: alignToGrid(endY)});
+            
+            return path;
+        }
+        
+        function connectSegmentToHub(segment, hubX, hubY) {
+            const segX = segment.x;
+            const segY = segment.y;
+            
+            const path = findCorridorPath(segX, segY, hubX, hubY);
+            
+            for (let i = 0; i < path.length - 1; i++) {
+                const current = path[i];
+                const next = path[i + 1];
+                
+                if (current.x === next.x) {
+                    const minY = Math.min(current.y, next.y);
+                    const maxY = Math.max(current.y, next.y);
+                    createCorridorSegment(current.x, minY, 5, maxY - minY + 5);
+                } else {
+                    const minX = Math.min(current.x, next.x);
+                    const maxX = Math.max(current.x, next.x);
+                    createCorridorSegment(minX, current.y, maxX - minX + 5, 5);
+                }
+            }
+        }
+        
+        function createMultiRoomCorridor(roomsToConnect) {
+            if (roomsToConnect.length < 2) return;
+            
+            const avgX = roomsToConnect.reduce((sum, room) => sum + room.x + room.width/2, 0) / roomsToConnect.length;
+            const avgY = roomsToConnect.reduce((sum, room) => sum + room.y + room.height/2, 0) / roomsToConnect.length;
+            
+            let centerX = alignToGrid(avgX);
+            let centerY = alignToGrid(avgY);
+            
+            let attempts = 0;
+            while (attempts < 20) {
+                let canPlace = true;
+                for (let i = centerX - 5; i < centerX + 15; i++) {
+                    for (let j = centerY - 5; j < centerY + 15; j++) {
+                        if (i >= 0 && i < MAP_SIZE && j >= 0 && j < MAP_SIZE) {
+                            if (map[i][j] !== ROOM_TYPES.EMPTY && map[i][j] !== ROOM_TYPES.CORRIDOR) {
+                                canPlace = false;
+                                break;
+                            }
+                        }
+                    }
+                    if (!canPlace) break;
+                }
+                
+                if (canPlace) break;
+                
+                centerX = alignToGrid(avgX + (Math.random() - 0.5) * 20);
+                centerY = alignToGrid(avgY + (Math.random() - 0.5) * 20);
+                attempts++;
+            }
+            
+            createCorridorSegment(centerX - 5, centerY - 5, 10, 10);
+            
+            for (let room of roomsToConnect) {
+                const segments = getWallSegments(room);
+                
+                let bestSegment = null;
+                let minDistance = Infinity;
+                
+                for (let segment of segments) {
+                    const dist = Math.abs(segment.x - centerX) + Math.abs(segment.y - centerY);
+                    if (dist < minDistance) {
+                        minDistance = dist;
+                        bestSegment = segment;
+                    }
+                }
+                
+                if (bestSegment && createDoor(room, bestSegment)) {
+                    connectSegmentToHub(bestSegment, centerX, centerY);
+                    room.connections++;
+                }
+            }
+        }
+        
+        function generateCorridors() {
+            const allRooms = [...rooms];
+            console.log(`연결할 총 방 개수: ${allRooms.length}`);
+            
+            const connected = new Set();
+            const corridorId = {current: 1};
+            
+            // 모든 방이 연결될 때까지 반복
+            while (connected.size < allRooms.length) {
+                const unconnectedRooms = allRooms.filter(room => !connected.has(room));
+                
+                if (unconnectedRooms.length === 0) break;
+                
+                // 복도에 연결할 방들 선택 (2-4개)
+                const roomsToConnect = selectRoomsForCorridor(unconnectedRooms, connected, allRooms);
+                
+                if (roomsToConnect.length >= 2) {
+                    console.log(`복도 ${corridorId.current}: ${roomsToConnect.map(r => getRoomName(r)).join(', ')} 연결 (${roomsToConnect.length}개 방)`);
+                    
+                    // 다중 방 연결 복도 생성
+                    createMultiRoomCorridor(roomsToConnect, corridorId.current);
+                    
+                    // 연결된 방들 기록
+                    for (let room of roomsToConnect) {
+                        connected.add(room);
+                        room.connections++;
+                    }
+                    
+                    corridorId.current++;
+                } else {
+                    // 남은 방이 1개뿐이면 가장 가까운 연결된 방과 연결
+                    if (unconnectedRooms.length === 1 && connected.size > 0) {
+                        const lastRoom = unconnectedRooms[0];
+                        const connectedArray = Array.from(connected);
+                        
+                        connectedArray.sort((a, b) => getDistance(lastRoom, a) - getDistance(lastRoom, b));
+                        const closestRoom = connectedArray[0];
+                        
+                        console.log(`마지막 방 연결: ${getRoomName(lastRoom)} ↔ ${getRoomName(closestRoom)}`);
+                        connectTwoRoomsDirectly(lastRoom, closestRoom);
+                        connected.add(lastRoom);
+                    }
+                    break;
+                }
+            }
+            
+            console.log(`모든 방 연결 완료: ${connected.size}/${allRooms.length}`);
+        }
+        
+        function selectRoomsForCorridor(unconnectedRooms, connected, allRooms) {
+            const roomsToConnect = [];
+            
+            // 연결할 방 개수 결정 (2-4개)
+            const numRooms = Math.min(4, Math.max(2, Math.floor(Math.random() * 3) + 2));
+            
+            if (connected.size === 0) {
+                // 첫 번째 복도: 연결되지 않은 방들만 선택
+                for (let i = 0; i < Math.min(numRooms, unconnectedRooms.length); i++) {
+                    roomsToConnect.push(unconnectedRooms[i]);
+                }
+            } else {
+                // 연결되지 않은 방 1개 이상 + 연결된 방들도 포함 가능
+                const unconnectedCount = Math.ceil(numRooms / 2); // 최소 절반은 연결되지 않은 방
+                
+                // 연결되지 않은 방들 추가
+                for (let i = 0; i < Math.min(unconnectedCount, unconnectedRooms.length); i++) {
+                    roomsToConnect.push(unconnectedRooms[i]);
+                }
+                
+                // 남은 자리에 연결된 방들도 추가 (단, 추가 문 생성 가능한 방만)
+                if (roomsToConnect.length < numRooms && connected.size > 0) {
+                    const connectedArray = Array.from(connected);
+                    const remainingSlots = numRooms - roomsToConnect.length;
+                    
+                    // 추가 문을 만들 수 있는 연결된 방들만 필터링
+                    const availableConnectedRooms = connectedArray.filter(room => {
+                        const specialRooms = [ROOM_TYPES.TOILET, ROOM_TYPES.ELEVATOR, ROOM_TYPES.STAIR];
+                        if (specialRooms.includes(room.type)) {
+                            return room.doorCount < 1; // 특수방은 문이 1개 미만일 때만
+                        }
+                        return true; // 일반방은 항상 가능
+                    });
+                    
+                    if (availableConnectedRooms.length > 0 && roomsToConnect.length > 0) {
+                        const baseRoom = roomsToConnect[0];
+                        availableConnectedRooms.sort((a, b) => getDistance(baseRoom, a) - getDistance(baseRoom, b));
+                        
+                        for (let i = 0; i < Math.min(remainingSlots, availableConnectedRooms.length); i++) {
+                            if (Math.random() > 0.3) { // 70% 확률로 연결된 방도 포함
+                                roomsToConnect.push(availableConnectedRooms[i]);
+                            }
+                        }
+                    }
+                }
+            }
+            
+            return roomsToConnect;
+        }
+        
+        function createMultiRoomCorridor(roomsToConnect, corridorId) {
+            if (roomsToConnect.length < 2) return;
+            
+            if (roomsToConnect.length === 2) {
+                // 2개 방: 직선 복도
+                connectTwoRoomsDirectly(roomsToConnect[0], roomsToConnect[1]);
+            } else if (roomsToConnect.length === 3) {
+                // 3개 방: T자형 복도
+                createTShapedCorridor(roomsToConnect);
+            } else {
+                // 4개 방: 십자형 복도
+                createCrossShapedCorridor(roomsToConnect);
+            }
+        }
+        
+        function createTShapedCorridor(rooms) {
+            // T자형 복도: 중앙에 허브를 만들고 3방향으로 뻗어나감
+            const centerX = rooms.reduce((sum, room) => sum + room.x + room.width/2, 0) / rooms.length;
+            const centerY = rooms.reduce((sum, room) => sum + room.y + room.height/2, 0) / rooms.length;
+            
+            const hubX = alignToGrid(centerX);
+            const hubY = alignToGrid(centerY);
+            
+            // 중앙 허브 생성 (10x10)
+            const adjustedHub = findSafeCenterPosition(hubX, hubY, 10, 10);
+            createCorridorSegment(adjustedHub.x, adjustedHub.y, 10, 10);
+            
+            // 각 방을 허브에 연결
+            for (let room of rooms) {
+                connectRoomToHub(room, adjustedHub.x + 5, adjustedHub.y + 5);
+            }
+            
+            console.log(`  T자형 복도 생성: 중심 (${adjustedHub.x + 5}, ${adjustedHub.y + 5})`);
+        }
+        
+        function createCrossShapedCorridor(rooms) {
+            // 십자형 복도: 중앙에 큰 허브를 만들고 4방향으로 뻗어나감
+            const centerX = rooms.reduce((sum, room) => sum + room.x + room.width/2, 0) / rooms.length;
+            const centerY = rooms.reduce((sum, room) => sum + room.y + room.height/2, 0) / rooms.length;
+            
+            const hubX = alignToGrid(centerX);
+            const hubY = alignToGrid(centerY);
+            
+            // 중앙 허브 생성 (15x15)
+            const adjustedHub = findSafeCenterPosition(hubX, hubY, 15, 15);
+            createCorridorSegment(adjustedHub.x, adjustedHub.y, 15, 15);
+            
+            // 각 방을 허브에 연결
+            for (let room of rooms) {
+                connectRoomToHub(room, adjustedHub.x + 7, adjustedHub.y + 7);
+            }
+            
+            console.log(`  십자형 복도 생성: 중심 (${adjustedHub.x + 7}, ${adjustedHub.y + 7})`);
+        }
+        
+        function findSafeCenterPosition(idealX, idealY, width, height) {
+            let bestX = idealX;
+            let bestY = idealY;
+            
+            // 이상적인 위치부터 시작해서 방과 겹치지 않는 위치 찾기
+            for (let attempts = 0; attempts < 20; attempts++) {
+                let canPlace = true;
+                
+                for (let i = bestX - 5; i < bestX + width + 5; i++) {
+                    for (let j = bestY - 5; j < bestY + height + 5; j++) {
+                        if (i >= 0 && i < MAP_SIZE && j >= 0 && j < MAP_SIZE) {
+                            const cellType = map[i][j];
+                            if (cellType !== ROOM_TYPES.EMPTY && cellType !== ROOM_TYPES.CORRIDOR) {
+                                canPlace = false;
+                                break;
+                            }
+                        }
+                    }
+                    if (!canPlace) break;
+                }
+                
+                if (canPlace) break;
+                
+                // 위치 조정
+                bestX = alignToGrid(idealX + (Math.random() - 0.5) * 30);
+                bestY = alignToGrid(idealY + (Math.random() - 0.5) * 30);
+                bestX = Math.max(5, Math.min(MAP_SIZE - width - 5, bestX));
+                bestY = Math.max(5, Math.min(MAP_SIZE - height - 5, bestY));
+            }
+            
+            return {x: bestX, y: bestY};
+        }
+        
+        function connectRoomToHub(room, hubCenterX, hubCenterY) {
+            const segments = getWallSegments(room);
+            
+            // 허브 중심에 가장 가까운 벽면 구간 선택
+            let bestSegment = null;
+            let minDistance = Infinity;
+            
+            for (let segment of segments) {
+                const dist = Math.abs(segment.x + 2.5 - hubCenterX) + Math.abs(segment.y + 2.5 - hubCenterY);
+                if (dist < minDistance) {
+                    minDistance = dist;
+                    bestSegment = segment;
+                }
+            }
+            
+            if (bestSegment) {
+                // 문 생성
+                createDoor(room, bestSegment);
+                
+                // 방에서 허브까지 직선 복도 생성
+                createStraightCorridorToHub(bestSegment, hubCenterX, hubCenterY);
+            }
+        }
+        
+        function createStraightCorridorToHub(segment, hubX, hubY) {
+            const segX = segment.x + 2;
+            const segY = segment.y + 2;
+            
+            // 세그먼트 방향에 따라 복도 생성
+            if (segment.roomSide === 'top' || segment.roomSide === 'bottom') {
+                // 세로 방향 연결
+                const startY = segment.roomSide === 'top' ? segment.y : segment.y + 1;
+                const endY = hubY;
+                const minY = Math.min(startY, endY);
+                const maxY = Math.max(startY, endY);
+                
+                createCorridorSegment(segX - 2, minY, 5, maxY - minY + 1);
+                
+                // 허브까지 수평 연결
+                const minX = Math.min(segX, hubX);
+                const maxX = Math.max(segX, hubX);
+                createCorridorSegment(minX - 2, hubY - 2, maxX - minX + 5, 5);
+            } else {
+                // 가로 방향 연결
+                const startX = segment.roomSide === 'left' ? segment.x : segment.x + 1;
+                const endX = hubX;
+                const minX = Math.min(startX, endX);
+                const maxX = Math.max(startX, endX);
+                
+                createCorridorSegment(minX, segY - 2, maxX - minX + 1, 5);
+                
+                // 허브까지 수직 연결
+                const minY = Math.min(segY, hubY);
+                const maxY = Math.max(segY, hubY);
+                createCorridorSegment(hubX - 2, minY - 2, 5, maxY - minY + 5);
+            }
+        }
+        
+        function createLShapedCorridor(seg1, seg2) {
+            const x1 = seg1.x;
+            const y1 = seg1.y;
+            const x2 = seg2.x;
+            const y2 = seg2.y;
+            
+            if (Math.random() > 0.5) {
+                // 수평 먼저, 그 다음 수직
+                const minX = Math.min(x1, x2);
+                const maxX = Math.max(x1, x2);
+                const corridorY = alignToGrid(y1);
+                
+                // 수평 복도 (폭 5)
+                createCorridor(minX, corridorY, maxX - minX + 5, 5);
+                
+                // 수직 복도 (폭 5)
+                const minY = Math.min(y1, y2);
+                const maxY = Math.max(y1, y2);
+                const corridorX = alignToGrid(x2);
+                createCorridor(corridorX, minY, 5, maxY - minY + 5);
+                
+            } else {
+                // 수직 먼저, 그 다음 수평
+                const minY = Math.min(y1, y2);
+                const maxY = Math.max(y1, y2);
+                const corridorX = alignToGrid(x1);
+                
+                // 수직 복도 (폭 5)
+                createCorridor(corridorX, minY, 5, maxY - minY + 5);
+                
+                // 수평 복도 (폭 5)
+                const minX = Math.min(x1, x2);
+                const maxX = Math.max(x1, x2);
+                const corridorY = alignToGrid(y2);
+                createCorridor(minX, corridorY, maxX - minX + 5, 5);
+            }
+        }
+        
+        function getRoomMaxDoors(room) {
+            const specialRooms = [ROOM_TYPES.TOILET, ROOM_TYPES.ELEVATOR, ROOM_TYPES.STAIR];
+            return specialRooms.includes(room.type) ? 1 : 999; // 특수방 1개, 일반방 제한없음
+        }
+        
+        function getRoomId(room) {
+            return `${room.type}_${room.x}_${room.y}`;
+        }
+        
+        function getDistance(room1, room2) {
+            const centerX1 = room1.x + room1.width / 2;
+            const centerY1 = room1.y + room1.height / 2;
+            const centerX2 = room2.x + room2.width / 2;
+            const centerY2 = room2.y + room2.height / 2;
+            return Math.abs(centerX1 - centerX2) + Math.abs(centerY1 - centerY2);
+        }
+        
+        function getRoomName(room) {
+            if (room.type === ROOM_TYPES.EXTERNAL_DOOR) {
+                return `외부문(${room.side})`;
+            }
+            return ROOMS[room.type].name;
+        }
+        
+        function drawMap() {
+            const canvas = document.getElementById('mapCanvas');
+            const ctx = canvas.getContext('2d');
+            
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            
+            ctx.fillStyle = '#f0f0f0';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+            
+            for (let x = 0; x < MAP_SIZE; x++) {
+                for (let y = 0; y < MAP_SIZE; y++) {
+                    const cellType = map[x][y];
+                    if (cellType !== ROOM_TYPES.EMPTY) {
+                        ctx.fillStyle = ROOMS[cellType].color;
+                        ctx.fillRect(x * CELL_SIZE, y * CELL_SIZE, CELL_SIZE, CELL_SIZE);
+                    }
+                }
+            }
+            
+            // 외부문 표시 (빨간색 테두리로)
+            ctx.strokeStyle = '#FF6347';
+            ctx.lineWidth = 3;
+            for (let room of rooms) {
+                if (room.type === ROOM_TYPES.EXTERNAL_DOOR) {
+                    ctx.strokeRect(room.x * CELL_SIZE, room.y * CELL_SIZE, 
+                                 room.width * CELL_SIZE, room.height * CELL_SIZE);
+                }
+            }
+            
+            // 5단위 격자 그리기
+            ctx.strokeStyle = '#ddd';
+            ctx.lineWidth = 1;
+            for (let i = 0; i <= MAP_SIZE; i += 5) {
+                ctx.beginPath();
+                ctx.moveTo(i * CELL_SIZE, 0);
+                ctx.lineTo(i * CELL_SIZE, MAP_SIZE * CELL_SIZE);
+                ctx.stroke();
+                
+                ctx.beginPath();
+                ctx.moveTo(0, i * CELL_SIZE);
+                ctx.lineTo(MAP_SIZE * CELL_SIZE, i * CELL_SIZE);
+                ctx.stroke();
+            }
+        }
+        
+        function generateMap() {
+            initMap();
+            generateRooms();
+            generateExternalDoors();
+            generateCorridors();
+            drawMap();
+        }
+        
+        window.onload = function() {
+            generateMap();
+        };
+    </script>
+</body>
+</html>

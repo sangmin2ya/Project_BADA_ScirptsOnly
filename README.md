@@ -3,7 +3,7 @@
 ## 핵심 경험
 ### 왁자지껄 협동
 ‘하나의 배’라는 제한된 공간에서 서로 손발을 맞춰 여러 상황에 대응하는 협동의 재미
-### 플레이 영상
+### [플레이 영상](https://drive.google.com/file/d/17CSzTif_qaQBOVJ-e7dZb_u95FjK0w05/view?usp=sharing)
 ![02-ezgif com-video-to-gif-converter](https://github.com/user-attachments/assets/061c11f0-e676-442c-95ff-75ce7ffb2146)
 ![03-ezgif com-video-to-gif-converter](https://github.com/user-attachments/assets/8e754daf-cc78-44d6-8aee-39f5f6072247)
 ![04-ezgif com-video-to-gif-converter](https://github.com/user-attachments/assets/e3d04c9c-dd76-4b79-93bf-065d61af577c)

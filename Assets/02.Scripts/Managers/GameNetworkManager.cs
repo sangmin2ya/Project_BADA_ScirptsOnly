@@ -258,6 +258,16 @@ public class GameNetworkManager : NetworkManager
     }
 
     /// <summary>
+    /// 클라이언트 시작 시 (호스트 포함)
+    /// </summary>
+    public override void OnStartClient()
+    {
+        base.OnStartClient();
+        // 포탄 프리팹은 클라이언트에서도 풀에서 꺼내고 반납하도록 스폰 핸들러 교체
+        BulletPool.RegisterClientHandlers(spawnPrefabs);
+    }
+
+    /// <summary>
     /// 클라이언트 연결 시
     /// </summary>
     public override void OnClientConnect()

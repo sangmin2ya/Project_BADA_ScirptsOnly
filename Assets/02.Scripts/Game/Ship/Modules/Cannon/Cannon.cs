@@ -343,7 +343,7 @@ public class Cannon : Module
         try
         {
             // 서버에서 투사체 생성
-            GameObject projectile = Instantiate(_projectilePrefab, fireData.position, fireData.rotation);
+            GameObject projectile = BulletPool.Get(_projectilePrefab, fireData.position, fireData.rotation);
 
             // Bullet 컴포넌트 설정
             if (projectile.TryGetComponent<Bullet>(out Bullet bulletComponent))

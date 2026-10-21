@@ -71,7 +71,7 @@ public class TempEnemyController : NetworkBehaviour, IDamageable, IEnterable
             Quaternion spawnRotation = Quaternion.LookRotation(Vector3.forward, _shipTransform.position - transform.position);
 
             // 총알 생성
-            GameObject bullet = Instantiate(_bulletPrefab, spawnPosition, spawnRotation);
+            GameObject bullet = BulletPool.Get(_bulletPrefab, spawnPosition, spawnRotation);
             Bullet bulletComponent = bullet.GetComponent<Bullet>();
             if (bulletComponent != null)
             {

@@ -22,17 +22,9 @@ public class Torpedo : Bullet
         // Bullet의 FixedUpdate를 수행하지 않음.
     }
 
-    protected override void OnDestroy()
+    protected override void OnDespawned()
     {
-        if (TargetIndicator != null)
-        {
-            Destroy(TargetIndicator);
-        }
-
-        if (PathLine != null)
-        {
-            Destroy(PathLine.gameObject);
-        }
+        ClearIndicators();
         Instantiate(_hitParticlePrefab, transform.position, Quaternion.identity);
     }
 }

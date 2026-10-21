@@ -435,8 +435,8 @@ public class FixedShield : Module
     [Server]
     private void HandleDefense(Bullet bullet)
     {
-        // 총알 파괴
-        NetworkServer.Destroy(bullet.gameObject);
+        // 총알 반납
+        BulletPool.Despawn(bullet.gameObject);
 
         // 방어 효과 표시
         RpcShowDefenseEffect(bullet.transform.position);

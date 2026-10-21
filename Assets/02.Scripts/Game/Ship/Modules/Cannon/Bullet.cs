@@ -58,6 +58,10 @@ public class Bullet : NetworkBehaviour
     private bool _willCollideWithShip = false;  // 배와 충돌 예정 여부
     private GameObject _predictedCollisionShip;  // 충돌 예정 배
 
+    private bool _hasStartedClient = false; // 한 번 이상 스폰된 적 있는지 (풀 재사용 여부)
+    private TrailRenderer[] _trails;
+    private ParticleSystem[] _particles;
+
     //private bool CanCollide => _currentHeight <= _collisionThreshold; // 특정 높이 이하면 충돌 가능
 
     public string EnemyTag => _enemyTag;
@@ -76,6 +80,11 @@ public class Bullet : NetworkBehaviour
     public override void OnStartClient()
     {
         base.OnStartClient();
+        if (_hasStartedClient)
+        {
+            ResetVisualsForReuse();
+        }
+        _hasStartedClient = true;
         _mainCamera = GameObject.Find("AgentCamera")?.GetComponent<Camera>();
         // 생존 시간 후 자동 파괴
         Invoke(nameof(DestroyBulletAfterLifeTime), _lifeTime);
@@ -233,8 +242,8 @@ public class Bullet : NetworkBehaviour
             }
         }
 
-        // 네트워크 파괴 (모든 클라이언트에서 동기화됨)
-        NetworkServer.Destroy(gameObject);
+        // 풀에 반납 (모든 클라이언트에서 동기화됨)
+        BulletPool.Despawn(gameObject);
     }
 
     /// <summary>
@@ -256,21 +265,104 @@ public class Bullet : NetworkBehaviour
         // 서버에서만 파괴 처리
         if (isServer)
         {
-            NetworkServer.Destroy(gameObject);
+            BulletPool.Despawn(gameObject);
         }
     }
 
+    /// <summary>
+    /// 풀에서 다시 꺼낸 포탄의 이전 발사 상태를 새로 생성한 것과 같게 초기화 (서버, 스폰 전)
+    /// </summary>
+    public virtual void ResetForReuse(Bullet prefab)
+    {
+        _currentHeight = 0f;
+        _velocityX = Vector2.zero;
+        _velocityY = 0f;
+        _startTime = 0f;
+        _enemyTag = prefab._enemyTag;
+        _isAbleToParry = prefab._isAbleToParry;
+        _targetPosition = Vector2.zero;
+        _actualCollisionPoint = Vector2.zero;
+        _initialDistance = 0f;
+        _currentIndicatorColor = default;
+        _willCollideWithShip = false;
+        _predictedCollisionShip = null;
+
+        if (TryGetComponent<Rigidbody2D>(out Rigidbody2D rb))
+        {
+            rb.velocity = Vector2.zero;
+            rb.angularVelocity = 0f;
+        }
+    }
+
+    /// <summary>
+    /// 풀에서 다시 꺼낸 포탄의 이전 연출이 남지 않도록 초기화 (원격 클라이언트 포함)
+    /// </summary>
+    private void ResetVisualsForReuse()
+    {
+        if (_trails == null)
+        {
+            _trails = GetComponentsInChildren<TrailRenderer>(true);
+            _particles = GetComponentsInChildren<ParticleSystem>(true);
+        }
+        foreach (TrailRenderer trail in _trails)
+        {
+            trail.Clear();
+        }
+        // 이전 입자만 지움. Play On Awake 파티클은 다시 활성화될 때 자동으로 재생됨
+        foreach (ParticleSystem particle in _particles)
+        {
+            particle.Clear(false);
+        }
+        // 서버는 ResetForReuse에서 초기화
+        if (!isServer && TryGetComponent<Rigidbody2D>(out Rigidbody2D rb))
+        {
+            rb.velocity = Vector2.zero;
+            rb.angularVelocity = 0f;
+        }
+    }
+
+    /// <summary>
+    /// 풀 반납 또는 파괴 시 모든 클라이언트(호스트 포함)에서 호출됨
+    /// </summary>
+    public override void OnStopClient()
+    {
+        base.OnStopClient();
+        CancelInvoke(nameof(DestroyBulletAfterLifeTime));
+        OnDespawned();
+    }
+
+    /// <summary>
+    /// 스폰되지 않은 채 파괴되는 경우를 위한 인디케이터 정리
+    /// </summary>
     protected virtual void OnDestroy()
+    {
+        ClearIndicators();
+    }
+
+    protected void ClearIndicators()
     {
         if (_targetIndicator != null)
         {
             Destroy(_targetIndicator);
+            _targetIndicator = null;
+            _indicatorRenderer = null;
         }
 
         if (_pathLine != null)
         {
+            // 경로선마다 새로 만든 머티리얼도 함께 해제
+            Destroy(_pathLine.sharedMaterial);
             Destroy(_pathLine.gameObject);
+            _pathLine = null;
         }
+    }
+
+    /// <summary>
+    /// 포탄이 사라질 때의 클라이언트 연출 (인디케이터 정리, 타격 이펙트)
+    /// </summary>
+    protected virtual void OnDespawned()
+    {
+        ClearIndicators();
 
         if (_currentHeight < 0)
         {
@@ -297,7 +389,7 @@ public class Bullet : NetworkBehaviour
     {
         if (_currentHeight < 0f)
         {
-            NetworkServer.Destroy(gameObject);
+            BulletPool.Despawn(gameObject);
             return;
         }
 
@@ -658,9 +750,9 @@ public class Bullet : NetworkBehaviour
         if (_pathLine != null)
         {
             // 거리에 따른 투명도 조절
-            Color lineColor = _pathLine.material.color;
+            Color lineColor = _pathLine.sharedMaterial.color;
             lineColor.a = (_currentIndicatorColor.a * 0.3f) * (currentDistance / _initialDistance);
-            _pathLine.material.color = lineColor;
+            _pathLine.sharedMaterial.color = lineColor;
         }
 
 
@@ -742,6 +834,7 @@ public class Bullet : NetworkBehaviour
         // 기존 경로선 제거
         if (_pathLine != null)
         {
+            Destroy(_pathLine.sharedMaterial);
             Destroy(_pathLine.gameObject);
         }
 

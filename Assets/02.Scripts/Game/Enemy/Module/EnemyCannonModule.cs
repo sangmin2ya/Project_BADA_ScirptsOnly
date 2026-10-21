@@ -363,7 +363,7 @@ public class EnemyCannonModule : EnemyModuleController
 
         float localAngle = Mathf.Atan2(direction.y, direction.x) * Mathf.Rad2Deg;
 
-        GameObject bullet = Instantiate(_projectilePrefab, _firePoint.position, Quaternion.Euler(0f, 0f, localAngle));
+        GameObject bullet = BulletPool.Get(_projectilePrefab, _firePoint.position, Quaternion.Euler(0f, 0f, localAngle));
         Bullet bulletComponent = bullet.GetComponent<Bullet>();
 
         if (bulletComponent != null)

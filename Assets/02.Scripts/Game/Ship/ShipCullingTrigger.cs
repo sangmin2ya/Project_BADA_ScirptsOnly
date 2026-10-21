@@ -11,6 +11,8 @@ public class ShipCullingTrigger : MonoBehaviour
     [Tooltip("화면 크기")]
     [SerializeField] private Vector2 _screenSize = new Vector2(1920, 1080);
     [SerializeField] private LayerMask _cullingLayerMask; // 최적화 적용할 레이어
+    // 픽셀 단위 화면 크기를 월드 단위 트리거 크기로 환산하는 비율 (1920x1080 -> 192x108)
+    private const float PixelToWorldScale = 0.1f;
 
     private void Start()
     {
@@ -25,7 +27,7 @@ public class ShipCullingTrigger : MonoBehaviour
     {
         // 화면 크기에 맞춰서 Collider를 생성하는 로직
         BoxCollider2D collider = gameObject.AddComponent<BoxCollider2D>();
-        collider.size = _screenSize * 0.1f; // Collider 크기를 화면 크기에 맞게 조정
+        collider.size = _screenSize * PixelToWorldScale; // 함선 중심으로 화면 크기만큼의 영역
         collider.isTrigger = true;
         collider.offset = Vector2.zero;
         collider.includeLayers = _cullingLayerMask; // 최적화 적용할 레이어 설정
@@ -42,7 +44,6 @@ public class ShipCullingTrigger : MonoBehaviour
 
     private void OnTriggerEnter2D(Collider2D other)
     {
-        Debug.Log("<color=green>시야에 들어옴 : </color>" + other.name);
         // 트리거에 들어온 오브젝트가 displayObject 컴포넌트를 가지고 있다면
         DisplayObject stackObject = other.transform.GetComponentInParent<DisplayObject>();
         if (stackObject != null)

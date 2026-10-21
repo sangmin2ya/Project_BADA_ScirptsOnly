@@ -150,10 +150,10 @@ public class SteamLobby : MonoBehaviour
         SteamMatchmaking.AddRequestLobbyListNumericalFilter("MaxPlayers", 0, ELobbyComparison.k_ELobbyComparisonGreaterThan);
         SteamMatchmaking.AddRequestLobbyListDistanceFilter(ELobbyDistanceFilter.k_ELobbyDistanceFilterWorldwide);
 
-        // 게임 식별자 필터 설정
-       // SteamMatchmaking.AddRequestLobbyListStringFilter("GameID", LobbyDataManager.GameName, ELobbyComparison.k_ELobbyComparisonEqual);
-        // 게임 버전 필터 설정
-       // SteamMatchmaking.AddRequestLobbyListStringFilter("GameVersion", Application.version, ELobbyComparison.k_ELobbyComparisonEqual);
+        // 게임 식별자 필터 설정 (공용 App ID를 쓰는 다른 게임의 로비 제외)
+        SteamMatchmaking.AddRequestLobbyListStringFilter(LobbyDataManager.GameIdKey, LobbyDataManager.GameName, ELobbyComparison.k_ELobbyComparisonEqual);
+        // 게임 버전 필터 설정 (버전이 다른 호스트와 연결되지 않도록)
+        SteamMatchmaking.AddRequestLobbyListStringFilter(LobbyDataManager.GameVersionKey, Application.version, ELobbyComparison.k_ELobbyComparisonEqual);
         // 로비 코드 필터 설정
         SteamMatchmaking.AddRequestLobbyListStringFilter(LobbyDataManager.LobbyCodeKey, code, ELobbyComparison.k_ELobbyComparisonEqual);
 
